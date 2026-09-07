@@ -6,10 +6,10 @@ import urllib.parse
 st.set_page_config(page_title="My Research Analyzer", layout="wide")
 st.title("Research Paper Analyzer 📚")
 
-# Get the API key securely
+# Get the API key securely and use a current, active model name
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel('gemini-1.5-pro')
+    model = genai.GenerativeModel('gemini-2.5-flash')
 except:
     st.error("API Key not found. Please add it to Streamlit Secrets.")
 
