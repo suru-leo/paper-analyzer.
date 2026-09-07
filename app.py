@@ -1,17 +1,16 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
 import requests
 import urllib.parse
 
 st.set_page_config(page_title="My Research Analyzer", layout="wide")
 st.title("Research Paper Analyzer 📚")
 
-# Get the API key securely and use a current, active model name
+# Initialize the modern Gemini client securely using the API key
 try:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel('gemini-2.5-flash')
-except:
-    st.error("API Key not found. Please add it to Streamlit Secrets.")
+    client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+except Exception as e:
+    st.error("API Key not found or invalid. Please check your Streamlit Secrets.")
 
 # Create a two-column layout
 col1, col2 = st.columns([1, 1])
@@ -23,9 +22,12 @@ with col1:
     if st.button("🔍 Find Related Papers"):
         if toc:
             with st.spinner("Scanning academic databases..."):
-                kw_prompt = f"Extract a highly specific 3 to 5 word academic search query based on this text. Output ONLY the query string, no quotes: {toc}"
-                kw_response = model.generate_content(kw_prompt)
-                query = kw_response.text.strip()
+                # Use Gemini 2.5 Flash to extract search keywords
+                kw_res = client.models.generate_content(
+                    model='gemini-2.5-flash',
+                    contents=f"Extract a highly specific 3 to 5 word academic search query based on this text. Output ONLY the query string, no quotes: {toc}"
+                )
+                query = kw_res.text.strip()
                 
                 url = f"https://api.semanticscholar.org/graph/v1/paper/search?query={urllib.parse.quote(query)}&limit=5&fields=title,authors,year,url"
                 res = requests.get(url).json()
@@ -40,9 +42,9 @@ with col1:
                         
                         st.markdown(f"- **[{title}]({link})** ({year}) by {authors} et al.")
                 else:
-                    st.warning("No papers found. Try adding more specific scientific terms to your TOC.")
+                    st.warning("No papers found. Try adding more specific terms to your TOC.")
         else:
-            st.warning("Please enter a TOC first.")
+            st.warning("Please enter a TOC first experience.")
 
 with col2:
     st.subheader("2. Analyze & Write")
@@ -52,15 +54,15 @@ with col2:
         if uploaded_files and toc:
             with st.spinner("Reading papers, paraphrasing, and formatting citations..."):
                 
-                # Directly pack the uploaded PDF bytes for Gemini
-                pdf_parts = []
+                # Pack the uploaded PDF bytes into the contents payload format for the new SDK
+                contents_payload = []
                 for f in uploaded_files:
-                    pdf_parts.append({
+                    contents_payload.append({
                         'mime_type': 'application/pdf',
                         'data': f.read()
                     })
                 
-                # Enhanced system instruction for review-style rewriting and inline citations
+                # Build the instruction text
                 system_instruction = f"""
                 You are an expert academic review writer. Analyze the provided research papers and write a comprehensive literature review section based strictly on the following Table of Contents (TOC) or instructions. 
 
@@ -73,8 +75,15 @@ with col2:
                 {toc}
                 """
                 
-                # Generate the text by sending the raw file parts alongside the prompt
-                response = model.generate_content(pdf_parts + [system_instruction])
+                # Append the instruction text to the payload array
+                contents_payload.append(system_instruction)
+                
+                # Generate content using the stable gemini-2.5-flash model
+                response = client.models.generate_content(
+                    model='gemini-2.5-flash',
+                    contents=contents_payload
+                )
+                
                 st.write(response.text)
         else:
             st.warning("Please upload at least one PDF and enter your TOC.")
